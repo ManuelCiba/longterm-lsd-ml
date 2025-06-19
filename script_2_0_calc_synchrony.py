@@ -15,13 +15,13 @@ import pandas as pd
 SOURCE_PATH = os.path.join(settings.PATH_RESULTS_FOLDER, settings.FOLDER_NAME_split_data)
 TARGET_PATH = os.path.join(settings.PATH_RESULTS_FOLDER, settings.FOLDER_NAME_feature_synchrony)
 
-def calculate_and_plot_and_save_synchrony(source_path, target_path):
+def calculate_and_plot_and_save_synchrony(source_path, target_path, window_size):
     # Load the spike trains
     binned_spike_trains_elephant = hd.load_pkl_as_list(source_path)
     spike_trains_elephant = spiketrain_handler.binned_to_spiketrains(binned_spike_trains_elephant)
 
     # Calculate synchrony
-    df_result, fig = _calculate_synchrony(spike_trains_elephant)
+    df_result, fig = _calculate_synchrony(spike_trains_elephant, window_size)
 
     # Save the figure
     figure_path = target_path.replace("pkl", "jpg")
@@ -32,14 +32,19 @@ def calculate_and_plot_and_save_synchrony(source_path, target_path):
     result_path = target_path.replace("pkl", "csv")
     df_result.to_csv(result_path)
 
-def _calculate_synchrony(st_list):
+def _calculate_synchrony(st_list, window_size):
 
     # init results, init figure
     df_result = pd.DataFrame()
     plt.figure(figsize=(8, 6))
     fig = plt.gcf()
  
-    s, trace = spike_contrast(st_list, return_trace=True)  # return_trace=True: returns not only synchrony value but also curves
+    # Define t_start and t_stop for synchrony calculation
+    # important to define so that synchrony is calculated for the same bins for all spike trains
+    # the same bins are needed to compare synchrony curves since they are used as features for ML
+    t_start = st_list[0].t_start.rescale(pq.s)  # start time of the first spike train
+    t_stop = t_start + window_size 
+    s, trace = spike_contrast(st_list, return_trace=True, t_start=t_start, t_stop=t_stop)  # return_trace=True: returns not only synchrony value but also curves
     result = trace.synchrony  # save whole synchrony curve, not only max value
     names = ["Spike-contrast (" + str(round(bin_size, 3)) + ")" for bin_size in trace.bin_size]
     df_result = pd.DataFrame(data=[result], columns=names)
@@ -71,38 +76,49 @@ if __name__ == '__main__':
     chip_names = settings.WELLS_CTRL + settings.WELLS_LSD  # Combine control and LSD wells
 
     # Generate all combinations of parameters
-    parameter_combinations = list(itertools.product(bin_sizes, window_sizes, window_overlaps, chip_names))
+    parameter_combinations = list(itertools.product(bin_sizes, window_sizes, window_overlaps))
 
     # loop through each combination of parameters
     for combination in parameter_combinations:
-        bin_size, window_size, window_overlap, chip_name = combination
+        bin_size, window_size, window_overlap = combination
 
         # Create a folder structure based on the parameter combination
         current_path = os.path.join(SOURCE_PATH, f"bin_{bin_size}",
-                                     f"window_{window_size}", f"overlap_{window_overlap}", chip_name)
+                                     f"window_{window_size}", f"overlap_{window_overlap}")
   
-        # List all directories in the current path
-        folders = [entry for entry in os.listdir(current_path) if os.path.isdir(os.path.join(current_path, entry))]
+        # get all directories in the current path (=chip names)
+        chip_folders = [entry for entry in os.listdir(current_path) if os.path.isdir(os.path.join(current_path, entry))]    
+        # sort the chip folders
+        chip_folders.sort()
 
-        # Loop through each folder and process the files
-        for folder in folders:
-            # Define the full path to the folder
-            folder_path = os.path.join(current_path, folder)
-            result_path = folder_path.replace(SOURCE_PATH, TARGET_PATH)
+        # Loop through each chip folder
+        for chip_folder in chip_folders:
 
-            # List all .pkl files in the folder
-            files = [f for f in os.listdir(folder_path) if f.endswith('.pkl')]
+            # Define the full path to the chip folder
+            chip_folder_path = os.path.join(current_path, chip_folder)
 
-            # Process each .pkl file (= spike train file)
-            for file in files:
-                source_file = os.path.join(folder_path, file)
-                target_file = os.path.join(result_path, file)
+            # List all directories in the current path
+            rec_folders = [entry for entry in os.listdir(chip_folder_path) if os.path.isdir(os.path.join(chip_folder_path, entry))]
 
-                # Test if target file already exists
-                if os.path.exists(target_file):
-                    print(f"Already processed: {target_file}")
-                    continue
-                else:
-                    # Calculate synchrony and save results
-                    print(f"Calculating synchrony: {source_file}")
-                    calculate_and_plot_and_save_synchrony(source_file, target_file)
+            # Loop through each folder (=recordings) and process the files
+            for rec_folder in rec_folders:
+                # Define the full path to the folder
+                rec_folder_path = os.path.join(chip_folder_path, rec_folder)
+                result_path = rec_folder_path.replace(SOURCE_PATH, TARGET_PATH)
+
+                # List all .pkl files in the folder
+                files = [f for f in os.listdir(rec_folder_path) if f.endswith('.pkl')]
+
+                # Process each .pkl file (= spike train file)
+                for file in files:
+                    source_file = os.path.join(rec_folder_path, file)
+                    target_file = os.path.join(result_path, file)
+
+                    # Test if target file already exists
+                    if os.path.exists(target_file):
+                        print(f"Already processed: {target_file}")
+                        continue
+                    else:
+                        # Calculate synchrony and save results
+                        print(f"Calculating synchrony: {source_file}")
+                        calculate_and_plot_and_save_synchrony(source_file, target_file, window_size)

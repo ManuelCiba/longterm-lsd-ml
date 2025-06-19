@@ -1,12 +1,12 @@
 import os
-from lib.machine_learning import workflow_new
+from lib.machine_learning import workflow_paired
 from lib.data_handler import folder_structure
 from lib.data_handler import hd
 import settings
 import numpy as np
 import pandas as pd
 
-SOURCE_DATA_FOLDER = settings.FOLDER_NAME_feature_synchrony
+SOURCE_DATA_FOLDER = settings.FOLDER_NAME_feature_synchrony  
 
 
 def save_dataframe(df_bic00, df_bic10, target_path):
@@ -47,8 +47,9 @@ if __name__ == '__main__':
 
     for path_experiment in path_experiment_list:
 
-        # FEATURES: only synchrony-curve
         source_path = path_experiment
+
+        # FEATURES: only synchrony-curve           
         TARGET_DATA_FOLDER = settings.FOLDER_NAME_feature_set
         target_path = source_path.replace(SOURCE_DATA_FOLDER, TARGET_DATA_FOLDER)
 
@@ -110,7 +111,10 @@ if __name__ == '__main__':
                     # Add a new column for the label
                     df['group'] = label_group
                     df['y'] = label_y
-                    df['days_after_treatment'] = label_days_after_treatment 
+                    df['days_after_treatment'] = label_days_after_treatment
+                    df['chip'] = chip_folder
+                    df['recording'] = rec_folder
+                    df['file'] = file
                     # Append the DataFrame to the list
                     df_list.append(df)
 

@@ -19,15 +19,13 @@ FOLDER_NAME_split_data = "1_0_split_data"
 FOLDER_NAME_feature_synchrony = "2_0_feature_synchrony"
 FOLDER_NAME_feature_set = "3_0_feature_set"
 
-
 # Parameter which will be calculated
 MIN_FR = 0.1 * pq.Hz  # Minimum firing rate in Hz, 0.1 Hz = 6 spikes per minute
 BIN_SIZES = [1 * pq.ms] #,10 * pq.ms, 100 * pq.ms] 
-WINDOW_SIZES = [120 * pq.s]  # 30 s excluded, took too long.  600 * pq.s excluded, not enough data points for 10 fold cross validation
-WINDOW_OVERLAPS = [0.5] # 0.5 = 50% overlap
-CONNECTIVITY_METHODS = ["spearman", "canonical", "pearson"]  # tspe excluded, because needs another thresholding method than the other correlation methods
+WINDOW_SIZES = [240 * pq.s]  # 30 s excluded, took too long.  600 * pq.s excluded, not enough data points for 10 fold cross validation
+WINDOW_OVERLAPS = [0] # 0.5 = 50% overlap
 FEATURE_SET_LIST = [
-                    FOLDER_NAME_feature_synchrony
+                    FOLDER_NAME_feature_set
     ]
-
-ML_MODELS = ['RF', 'XGboost', 'SVM', 'NB', 'LR', 'KNN', 'MLP']
+ML_MODELS = ['RF', 'SVM']
+#ML_MODELS = ['RF', 'XGboost', 'SVM', 'NB', 'LR', 'KNN', 'MLP']
