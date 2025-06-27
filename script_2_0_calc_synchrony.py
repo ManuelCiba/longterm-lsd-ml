@@ -20,17 +20,29 @@ def calculate_and_plot_and_save_synchrony(source_path, target_path, window_size)
     binned_spike_trains_elephant = hd.load_pkl_as_list(source_path)
     spike_trains_elephant = spiketrain_handler.binned_to_spiketrains(binned_spike_trains_elephant)
 
+    # Check if spike_trains_elephant is empty
+    all_empty = all((not element.size) if isinstance(element, np.ndarray) else not bool(element) for element in spike_trains_elephant)
+    if all_empty:
+        print(f"No spikes found in {source_path}. Skipping synchrony calculation.")
+        return
+
+
     # Calculate synchrony
-    df_result, fig = _calculate_synchrony(spike_trains_elephant, window_size)
+    try:
+        df_curve, fig = _calculate_synchrony(spike_trains_elephant, window_size)
+    except Exception as e:
+        print(f"Error calculating synchrony for {source_path}: {e}")
+        return
 
     # Save the figure
-    figure_path = target_path.replace("pkl", "jpg")
-    hd.save_figure(fig, figure_path)
+    if settings.FLAG_PLOT:
+        figure_path = target_path.replace("csv", "jpg")
+        hd.save_figure(fig, figure_path)
     plt.close(fig)
 
-    # Save the results
-    result_path = target_path.replace("pkl", "csv")
-    df_result.to_csv(result_path)
+    # Save the results 
+    hd.save_df_as_csv(df_curve, target_path)
+
 
 def _calculate_synchrony(st_list, window_size):
 
@@ -73,7 +85,7 @@ if __name__ == '__main__':
     window_overlaps = settings.WINDOW_OVERLAPS
 
     # get all chip names
-    chip_names = settings.WELLS_CTRL + settings.WELLS_LSD  # Combine control and LSD wells
+    chip_names = settings.WELLS_SHAM + settings.WELLS_DRUG  # Combine control and DRUG wells
 
     # Generate all combinations of parameters
     parameter_combinations = list(itertools.product(bin_sizes, window_sizes, window_overlaps))
@@ -109,16 +121,18 @@ if __name__ == '__main__':
                 # List all .pkl files in the folder
                 files = [f for f in os.listdir(rec_folder_path) if f.endswith('.pkl')]
 
-                # Process each .pkl file (= spike train file)
+                # Process each .pkl file (= spike train file) and
+                # calculate snychrony
                 for file in files:
-                    source_file = os.path.join(rec_folder_path, file)
-                    target_file = os.path.join(result_path, file)
+                    source_path = os.path.join(rec_folder_path, file)
+                    target_path = os.path.join(result_path, file)
+                    target_path = target_path.replace("pkl", "csv")
 
                     # Test if target file already exists
-                    if os.path.exists(target_file):
-                        print(f"Already processed: {target_file}")
+                    if os.path.exists(target_path):
+                        print(f"Already processed: {target_path}")
                         continue
                     else:
                         # Calculate synchrony and save results
-                        print(f"Calculating synchrony: {source_file}")
-                        calculate_and_plot_and_save_synchrony(source_file, target_file, window_size)
+                        print(f"Calculating synchrony: {target_path}")
+                        calculate_and_plot_and_save_synchrony(source_path, target_path, window_size)

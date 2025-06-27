@@ -39,6 +39,11 @@ def _extract_dr_cell_struct(dr_cell_struct):
 
 def convert_to_elephant(TS, t_stop=600):
     spiketrains_elephant = []
+    
+    if len(TS.shape) == 1:
+        # If TS is a 1D array, convert it to a 2D array with one column
+        TS = TS.reshape(-1, 1).transpose()
+
     for i in range(TS.shape[1]):
         spiketrain = TS[:, i]
         
@@ -58,7 +63,7 @@ def bin_spike_trains(spiketrains, bin_size):
 
     return bst_binary
 
-def convert_BnnedSpikeTrainView_to_BinnedSpikeTrain(bst_view):
+def convert_BinnedSpikeTrainView_to_BinnedSpikeTrain(bst_view):
     """
     Convert a BinnedSpikeTrainView to a full BinnedSpikeTrain.
     This is necessary because some methods require the full BinnedSpikeTrain.
@@ -71,7 +76,7 @@ def convert_BnnedSpikeTrainView_to_BinnedSpikeTrain(bst_view):
     )
 
 # Convert BinnedSpikeTrain to a list of neo.SpikeTrains
-def binned_to_spiketrains(binned_spiketrain):
+def OLD_binned_to_spiketrains(binned_spiketrain):
     spike_matrix = binned_spiketrain.to_array()  # Get binned data as a binary matrix
     spiketrains = []
     bin_edges = np.arange(
@@ -87,6 +92,44 @@ def binned_to_spiketrains(binned_spiketrain):
             spike_times, t_start=binned_spiketrain.t_start, t_stop=binned_spiketrain.t_stop
         ))
     
+    return spiketrains
+
+def binned_to_spiketrains(binned_spiketrain):
+    """
+    Converts a binned spike train into a list of neo.SpikeTrain objects.
+
+    Parameters:
+    - binned_spiketrain: A binned spike train object.
+
+    Returns:
+    - A list of neo.SpikeTrain objects.
+    """
+    # Convert binned spike train to binary matrix
+    spike_matrix = binned_spiketrain.to_array()
+
+    # Calculate bin edges
+    bin_edges = np.arange(
+        binned_spiketrain.t_start.magnitude,
+        binned_spiketrain.t_stop.magnitude + binned_spiketrain.bin_size.magnitude,
+        binned_spiketrain.bin_size.magnitude,
+    ) * binned_spiketrain.t_start.units
+
+    # Align lengths of bin_edges[:-1] and spike_matrix columns
+    n_bins = min(len(bin_edges) - 1, spike_matrix.shape[1])
+    bin_edges = bin_edges[:n_bins + 1]  # Ensure bin_edges matches spike_matrix
+    spike_matrix = spike_matrix[:, :n_bins]  # Trim spike_matrix if necessary
+
+    spiketrains = []
+
+    # Convert binary matrix rows to spike trains
+    for neuron_idx, spike_row in enumerate(spike_matrix):
+        spike_times = bin_edges[:-1][spike_row > 0]  # Convert bin indices to times
+        spiketrains.append(neo.SpikeTrain(
+            spike_times,
+            t_start=binned_spiketrain.t_start,
+            t_stop=binned_spiketrain.t_stop
+        ))
+
     return spiketrains
 
 def plot_spike_trains(spiketrains):

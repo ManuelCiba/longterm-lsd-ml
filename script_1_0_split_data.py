@@ -69,15 +69,14 @@ def split_spiketrains_and_save_results(spiketrains, bin_size, window_size, windo
             bst_w = bst.time_slice(t_start=window_start_list[w] * pq.s, t_stop=window_end_list[w] * pq.s)
 
             # save split spike trains as an HDF5 file
-            bst_w_full = spiketrain_handler.convert_BnnedSpikeTrainView_to_BinnedSpikeTrain(bst_w)
+            bst_w_full = spiketrain_handler.convert_BinnedSpikeTrainView_to_BinnedSpikeTrain(bst_w)
             hd.save_list_as_pkl(bst_w_full, full_path)
 
             # plot spike trains and save
-            if settings.FLAG_PLOT:
+            if False:
                 plot_spiketrains_and_save(bst_w, full_path)
         else:
             print("Already processed: " + full_path)
-
 
 def plot_spiketrains_and_save(bst, full_path):
 
@@ -93,7 +92,6 @@ def plot_spiketrains_and_save(bst, full_path):
     plt.title('Binned Spike Trains')
     hd.save_figure(fig, full_path.replace("csv", "jpg"))
     fig.clear()
-
 
 def define_full_file_name(result_folder, date, time, w):
     file_name = 'window' + '{:02}'.format(w)
@@ -112,7 +110,7 @@ if __name__ == '__main__':
     bin_sizes = settings.BIN_SIZES
     window_sizes = settings.WINDOW_SIZES
     window_overlaps = settings.WINDOW_OVERLAPS
-    chip_names = settings.WELLS_CTRL + settings.WELLS_LSD  # Combine control and LSD wells
+    chip_names = settings.WELLS_SHAM + settings.WELLS_DRUG  # Combine control and DRUG wells
 
     # Generate all combinations of parameters
     parameter_combinations = list(itertools.product(bin_sizes, window_sizes, window_overlaps, chip_names))
@@ -130,7 +128,7 @@ if __name__ == '__main__':
 
         # 1) load file
         # define full path of selected chip
-        path_chip = os.path.join(os.getcwd(), settings.PATH_DATA_ISMAEL, chip_name)
+        path_chip = os.path.join(os.getcwd(), settings.PATH_DATA_FOLDER, chip_name)
         
         # get file name of all .mat file within folder
         files = glob.glob(path_chip + '/*.mat')

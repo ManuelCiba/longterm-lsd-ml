@@ -1,5 +1,6 @@
 import glob
 from multiprocessing import Pool
+import multiprocessing
 import os
 import warnings
 import pickle
@@ -16,7 +17,7 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import make_scorer, accuracy_score, roc_auc_score, recall_score, precision_score, f1_score, \
     classification_report
 from sklearn.model_selection import GroupShuffleSplit
-from sklearn.model_selection import GroupKFold, GridSearchCV
+from sklearn.model_selection import GroupKFold, GridSearchCV, StratifiedGroupKFold
 from sklearn.model_selection import LeaveOneGroupOut
 from sklearn.naive_bayes import GaussianNB
 from sklearn.neighbors import KNeighborsClassifier
@@ -31,9 +32,16 @@ from lib.connectivity import matrix_handling
 def call(models, df_features):
     warnings.filterwarnings("ignore")
 
+    # print number of rows in df_features
+    print("Number of rows in df_features: " + str(len(df_features)))
+    # remove rows with NaN values
+    df_features = df_features.dropna()
+    # print number of rows in df_features
+    print("Number of rows after removing rows with NaN values: " + str(len(df_features)))
+
     # split the df_features into y and X and groups
     y = df_features['y']  # 'y' is the column with class labels
-    X = df_features.drop(columns=['y', 'group', 'chip', 'recording', 'file'])  # Drop 'y' and 'chip_id' columns to get features
+    X = df_features.drop(columns=['y', 'chip'])  # Drop 'y' and 'chip_id' columns to get features
     groups = df_features['chip'].values
 
     # scale the data in X with minmax scaling
@@ -46,7 +54,7 @@ def call(models, df_features):
     X = X.loc[:, (X != 0).any(axis=0)]
 
     # Step 3: Outer Cross-Validation using Leave-One-Group-Out
-    cv = GroupKFold(n_splits=5)
+    cv = StratifiedGroupKFold(n_splits=5)
     train_result_list = []  # To store the training metrics (inner CV results)
     test_result_list = []   # To store the test set performance (outer test results)
     X_train_list = [] # to store X_train for all splits, needed for SHAP
@@ -136,11 +144,20 @@ def _calling_the_models(models, X_train, y_train, groups_train):
     return df_train_results
 
 def _parallel_evaluate(model_name, X_train, y_train, groups_train):
+    # define number of CPU cores
+    num_models = 7 
+    num_cores = -1#int(multiprocessing.cpu_count()/ (num_models*2))
+    print("Number of cores used for parallel processing: " + str(num_cores))
     if model_name == 'RF':
         param_grid = {
             'n_estimators': [1, 2, 3, 5, 10, 30, 50, 100, 200, 300, 500]
+            #'n_estimators': [100],  # Skip very small values like 1, 2, 3
+            #'max_depth': [None, 10, 50],       # Control depth to avoid overfitting
+            #'max_features': ['sqrt'],     # Experiment with feature subset sizes
+            #'min_samples_split': [2, 10],           # Prevent overly complex splits
+            #'min_samples_leaf': [1, 5], 
         }
-        model = RandomForestClassifier(random_state=1234)
+        model = RandomForestClassifier(random_state=1234, n_jobs=num_cores) # use 24 cores for parallel processing
     elif model_name == 'SVM':
         param_grid = {'kernel': ['linear', 'rbf', 'poly', 'sigmoid'], 'gamma': [0.1, 0.01, 1e-3, 1e-4],
                       'C': [1, 10, 100, 1000]}
@@ -197,7 +214,7 @@ def _parallel_evaluate(model_name, X_train, y_train, groups_train):
 
 def _evaluate_model(model_name, model, param_grid, X, y, groups):
     """
-    Evaluate the model using Leave-One-Group-Out cross-validation within GridSearchCV.
+    Evaluate the model using grouped cross-validation within GridSearchCV.
 
     Args:
         model_name: the name of the machine learning model
@@ -205,13 +222,13 @@ def _evaluate_model(model_name, model, param_grid, X, y, groups):
         param_grid: The hyperparameter grid for GridSearchCV.
         X: Feature matrix.
         y: Labels.
-        groups: Group identifiers for Leave-One-Group-Out.
+        groups: Group identifiers for Grouped CrossValidation.
 
     Returns:
         Median, IQR, min, and max for ROC, accuracy, recall, precision, F1 score, and best model.
     """
     # Initialize cross-validator
-    cv = GroupKFold()
+    cv = StratifiedGroupKFold(n_splits=5)
 
     # Scoring metrics
     scoring = {
@@ -229,7 +246,10 @@ def _evaluate_model(model_name, model, param_grid, X, y, groups):
         scoring=scoring,
         refit='AUC',  # Select the model based on ROC AUC score
         cv=cv,
-        return_train_score=False
+        return_train_score=False,
+        verbose=3, # Verbose output for debugging
+        n_jobs=-1,  # Use all available cores for parallel processing
+        pre_dispatch='2*n_jobs'  # Manage memory usage
     )
 
     # Fit the model with the given cross-validation scheme
@@ -377,133 +397,7 @@ def load_df_results_from_hd(ml_result_path):
 
     return df_train_results, df_test_results, X_train_list, y_train_list, X_test_list, y_test_list
 
-def calculate_shap(df_train_result, X_train, y_train):
-    pass
-
 ###############################
-
-def call_old(models, df_features_bic00, df_features_class1):
-    warnings.filterwarnings("ignore")
-
-    X_train, X_test, y_train, y_test, groups_train, groups_test = scale_and_split(df_features_bic00,
-                                                                                        df_features_class1)
-    df_results, X_test, y_test = calling_the_models(models, X_train, X_test, y_train, y_test, groups_train)
-
-    return df_results, X_test, y_test
-
-
-def load_csv_to_np(full_path):
-    matrix = np.array(pd.read_csv(full_path, header=None))
-    # matrix = pd.read_csv(full_path, index=None)
-    return matrix
-
-
-def load_all_matrices(experiment_path, group, index_col=0):
-    # group: "class0" or "class1"
-
-    matrices_list = []
-
-    # for all chips in current folder
-    chip_list = os.listdir(experiment_path)
-    for chip in chip_list:
-
-        path_group = os.path.join(experiment_path, chip, group)
-        file_list = sorted(glob.glob(path_group + '/*.csv'))
-
-        # for all files (=windows) of the current chip
-        for file in file_list:
-            matrices_list.append(matrix_handling.load_correlation_matrix(file, index_col))
-
-    return matrices_list
-
-
-# TODO: is it correct to replace nan by zeros?
-# This is called before matrix gets fed into the ML model
-def flatten_matrices(matrix_list):
-    replaced_list = []
-    flatten_list = []
-
-    for i in matrix_list:
-        replaced_list.append(np.nan_to_num(i))
-
-    flatten_list = replaced_list
-    # print(len(replaced_list ))
-    # print(len(flatten_list))
-    return flatten_list
-
-
-def _flatten_matrix(x):
-    flatten = matrix.flatten(np.array(x))
-    return flatten
-
-
-# TODO: is it correct to replace nan by zeros?
-def flatten_df_matrices(df_matrix_list):
-    replaced_list = []
-    flatten_list = []
-
-    for df in df_matrix_list:
-        replaced_list.append(df.fillna(0))
-
-    for df in replaced_list:
-        flatten_list.append(matrix_handling.flatten_df_matrix(df))
-
-    return flatten_list
-
-
-def _get_labels(df_features_class0, df_features_class1):
-    no_label = [0] * len(df_features_class0)
-    yes_label = [1] * len(df_features_class1)
-
-    labels = no_label + yes_label
-
-    y = np.nan_to_num(labels)
-
-
-    return y
-
-def scale_and_split(df_features_class0, df_features_class1, flag_scaling=True):
-    # Get labels for both groups
-    y = _get_labels(df_features_class0, df_features_class1)
-
-    # Combine both feature sets into one DataFrame
-    X = pd.concat([df_features_class0, df_features_class1], axis=0).reset_index(drop=True)
-
-    # Create group labels based on which chip the data comes from
-    # Assuming you have chip IDs in a column, e.g., "chip_id"
-    groups_class0 = df_features_class0['chip_id'].values
-    groups_class1 = df_features_class1['chip_id'].values
-
-    # Combine the group labels from both conditions (must align with X and y)
-    groups = np.concatenate([groups_class0, groups_class1])
-
-    # GroupShuffleSplit to split data, ensuring no leakage of chips between train and test
-    gss = GroupShuffleSplit(test_size=0.25, n_splits=1, random_state=1234)
-    train_idx, test_idx = next(gss.split(X, y, groups=groups))
-
-    # Get train and test sets
-    X_train, X_test = X.iloc[train_idx], X.iloc[test_idx]
-    y_train, y_test = y[train_idx], y[test_idx]
-    groups_train, groups_test = groups[train_idx], groups[test_idx]
-
-    print("Is there an inbalance between classes?")
-    print(np.bincount(y_train))
-    print(np.bincount(y_test))
-
-    # do the scaling seperate for training and test to avoid data leackage
-    if flag_scaling:
-        scaler = preprocessing.StandardScaler()
-        X_train = scaler.fit_transform(X_train)
-        X_test = scaler.transform(X_test)
-    else:
-        X_train = X_train.to_numpy()  # to numpy array like the fit_transform function does
-        X_test = X_test.to_numpy()
-
-    # Convert NaNs to numbers if present
-    X_train = np.nan_to_num(X_train)
-    X_test = np.nan_to_num(X_test)
-
-    return X_train, X_test, y_train, y_test, groups_train, groups_test
 
 
 def plot_and_analyze_df_results(df_results, X_test, y_test):
