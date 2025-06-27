@@ -31,10 +31,14 @@ def _calculate_feature_change(X_train_list, y_train_list):
         y_train = y_train_list[i]
 
         # Calculate mean feature values for label 0 (before)
-        before_mean = X_train[y_train.iloc[:, 0] == 0].mean()
+        #before_mean = X_train[y_train.iloc[:, 0] == 0].mean()
 
         # Calculate mean feature values for label 1 (after)
-        after_mean = X_train[y_train.iloc[:, 0] == 1].mean()
+        #after_mean = X_train[y_train.iloc[:, 0] == 1].mean()
+
+        # If y_train is a pandas Series of 0/1 labels:
+        before_mean = X_train[y_train == 0].mean()
+        after_mean  = X_train[y_train == 1].mean()
 
         # Calculate the change (after - before)
         change = after_mean - before_mean
@@ -109,7 +113,7 @@ def _combined_shap_plot(model_name, shap_values_list, X_train_list, y_train_list
 
     # Plot with error bars
     # Create subplots
-    fig, ax = plt.subplots(1, 1, figsize=(4, 6))
+    fig, ax = plt.subplots(1, 1, figsize=(4, 16))
 
     bars = plt.barh(ranked_shap_df.index, ranked_shap_df['Median SHAP Value'],
                     xerr=[ranked_shap_df['Median SHAP Value'] - ranked_shap_df['Min SHAP Value'],
