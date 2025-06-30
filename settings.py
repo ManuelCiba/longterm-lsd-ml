@@ -71,6 +71,7 @@ FOLDER_NAME_feature_set_synchrony_curve = "3_0_feature_set_synchrony_curve"
 FOLDER_NAME_feature_set_synchrony_stats = "3_0_feature_set_synchrony_stats"
 FOLDER_NAME_feature_set_synchrony_curve_days = "3_0_feature_set_synchrony_curve_days"
 FOLDER_NAME_feature_set_synchrony_stats_days = "3_0_feature_set_synchrony_stats_days"
+FOLDER_NAME_statistics = "6_0_statistics"
 
 # Parameter which will be calculated
 MIN_FR = 0.1 * pq.Hz  # Minimum firing rate in Hz, 0.1 Hz = 6 spikes per minute

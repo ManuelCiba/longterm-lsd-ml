@@ -78,6 +78,7 @@ def load_pkl_as_list(full_path):
 
 
 def save_figure(fig, full_path):
+
     # create directory
     result_folder = os.path.dirname(full_path)
     os.makedirs(result_folder, exist_ok=True)
