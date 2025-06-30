@@ -163,7 +163,7 @@ def plot_all_shap_values(base_folder, models, X_train_list, y_train_list):
         full_path = os.path.join(base_folder, "SHAP_all_" + model_name + ".pdf")
         hd.save_figure(fig, full_path)
 
-def plot_shap_values(base_folder, split_idx, model_name, shap_values):
+def plot_shap_values(shap_values, output_path):
     # Plot the SHAP values
     # Create subplots
     fig, ax = plt.subplots(1, 1, figsize=(8, 6))
@@ -176,10 +176,75 @@ def plot_shap_values(base_folder, split_idx, model_name, shap_values):
     else:
         shap.plots.beeswarm(shap_values)
     # plt.title(f"SHAP Values for Model: {model_name} (Split {i + 1})")
-    full_path = os.path.join(base_folder, "shap_" + model_name + "_split_" + str(split_idx) + ".pdf")
+
+    hd.save_figure(fig, output_path)
+    hd.save_figure(fig, output_path.replace("jpg", "pdf"))
+
+
+def plot_shap_correlation(base_folder, models):
+    shap_model_list = []
+
+    # Loop through all models to load and compute median SHAP values
+    for model_name in models:
+        print(f"Processing model: {model_name}")
+
+        # Define filename to load
+        full_path = os.path.join(base_folder, f"shap_values_list_{model_name}.pkl")
+        shap_values_list = hd.load_pkl_as_list(full_path)
+
+        # Combine SHAP values across splits to get median values
+        median_shap_values, _, _ = _combine_shap_values_across_splits(shap_values_list)
+
+        # Append the median SHAP values (1D array) for this model
+        shap_model_list.append(median_shap_values)
+
+    # Stack the list into a DataFrame to create a model-feature matrix
+    shap_df = pd.DataFrame(shap_model_list, index=models).T
+
+    # Calculate the correlation matrix between models based on SHAP values
+    correlation_matrix = shap_df.corr()
+
+    # Plot the correlation matrix as a heatmap
+    fig, ax = plt.subplots(1, 1, figsize=(8, 6))
+    sns.heatmap(correlation_matrix, annot=True, cmap='Spectral', vmin=-1, vmax=1,
+                cbar_kws={'label': 'Correlation Coefficient'})
+    plt.title("Correlation of SHAP Values Between Models")
+    plt.xlabel("Models")
+    plt.ylabel("Models")
+
+    full_path = os.path.join(base_folder, "SHAP_correlation.pdf")
     hd.save_figure(fig, full_path)
-    full_path = os.path.join(base_folder, "shap_" + model_name + "_split_" + str(split_idx) + ".jpg")
-    hd.save_figure(fig, full_path)
+
+def plot_shap_dependence(shap_values, X_train, feature_name, output_path, interaction_index=None):
+    """
+    Generate a SHAP dependence plot for a specific feature.
+
+    Args:
+        shap_values: Array-like SHAP values for the dataset.
+        X_train: DataFrame of training features.
+        feature_name: The name of the feature to plot.
+        output_path: Path to save the dependence plot.
+        interaction_index: Optional, name of the feature to show interaction effects.
+    """
+    # Multi-class case: pick SHAP values for the positive class (e.g., class 1)
+    if len(shap_values.shape) == 3:
+        if shap_values.shape[2] == 2:  # Multi-class SHAP values
+            shap_values = shap_values[:, :, 1]  # Use SHAP values for class 1
+
+    print("SHAP values shape:", shap_values.shape)
+    print("X_train shape:", X_train.shape)
+
+    fig, ax = plt.subplots(1, 1, figsize=(8, 6))
+    shap.dependence_plot(
+        feature_name,
+        shap_values.values,
+        X_train,
+        interaction_index=interaction_index,
+        show=False  # Suppress showing the plot in interactive environments
+    )
+
+    hd.save_figure(fig, output_path)
+    hd.save_figure(fig, output_path.replace("jpg", "pdf"))
 
 def calculate_shap_values(base_folder, models, X_train_list, df_train_results):
 
@@ -223,47 +288,25 @@ def calculate_shap_values(base_folder, models, X_train_list, df_train_results):
             shap_values = explainer(X_train)
             shap_values_list.append(shap_values)
 
-            plot_shap_values(base_folder, i, model_name, shap_values)
+            # plot shap values (classical feature ranking)
+            output_path = os.path.join(base_folder, "shap_" + model_name + "_split_" + str(i) + ".jpg")
+            plot_shap_values(shap_values, output_path=output_path)
+
+            # Plot SHAP dependence for `days_after_treatment`
+            output_path = os.path.join(base_folder, "shap_dependence_split_" + model_name + str(i) + ".jpg")
+            try:
+                plot_shap_dependence(
+                    shap_values,
+                    X_train,
+                    feature_name="days_after_treatment",
+                    output_path=output_path,
+                    interaction_index=None  # Replace with another feature for interaction if needed
+                )
+            except Exception as e: 
+                print(e)
 
         # save shap_values_list
         hd.save_list_as_pkl(shap_values_list, full_path)
-
-
-def plot_shap_correlation(base_folder, models):
-    shap_model_list = []
-
-    # Loop through all models to load and compute median SHAP values
-    for model_name in models:
-        print(f"Processing model: {model_name}")
-
-        # Define filename to load
-        full_path = os.path.join(base_folder, f"shap_values_list_{model_name}.pkl")
-        shap_values_list = hd.load_pkl_as_list(full_path)
-
-        # Combine SHAP values across splits to get median values
-        median_shap_values, _, _ = _combine_shap_values_across_splits(shap_values_list)
-
-        # Append the median SHAP values (1D array) for this model
-        shap_model_list.append(median_shap_values)
-
-    # Stack the list into a DataFrame to create a model-feature matrix
-    shap_df = pd.DataFrame(shap_model_list, index=models).T
-
-    # Calculate the correlation matrix between models based on SHAP values
-    correlation_matrix = shap_df.corr()
-
-    # Plot the correlation matrix as a heatmap
-    fig, ax = plt.subplots(1, 1, figsize=(8, 6))
-    sns.heatmap(correlation_matrix, annot=True, cmap='Spectral', vmin=-1, vmax=1,
-                cbar_kws={'label': 'Correlation Coefficient'})
-    plt.title("Correlation of SHAP Values Between Models")
-    plt.xlabel("Models")
-    plt.ylabel("Models")
-
-    full_path = os.path.join(base_folder, "SHAP_correlation.pdf")
-    hd.save_figure(fig, full_path)
-
-
 
 if __name__ == '__main__':
     # for all machine learning folder:
@@ -272,8 +315,10 @@ if __name__ == '__main__':
         print(FOLDER)
 
         SOURCE_DATA_FOLDER = FOLDER.replace("0_feature_set", "1_ML")
+        TARGET_DATA_FOLDER = FOLDER.replace("0_feature_set", "2_SHAP")
 
-        base_folder = os.path.join(settings.PATH_RESULTS_FOLDER, SOURCE_DATA_FOLDER)
+        source_folder = os.path.join(settings.PATH_RESULTS_FOLDER, SOURCE_DATA_FOLDER)
+        target_folder = os.path.join(settings.PATH_RESULTS_FOLDER, TARGET_DATA_FOLDER)
 
         # Define parameter set for which SHAP will be calculated
         bin_size = 1 * pq.ms
@@ -281,21 +326,20 @@ if __name__ == '__main__':
         window_overlap = 0.5
         models = settings.ML_MODELS
 
-        # define path where df_results are saved
-        path_experiment = os.path.join(base_folder,
+        # define path where df_results are stored
+        path_experiment = os.path.join(source_folder,
                                      f"bin_{bin_size}",
                                      f"window_{window_size}",
                                      f"overlap_{window_overlap}")
-
 
         # load ml results
         df_train_results, df_test_results, X_train_list, y_train_list, X_test_list, y_test_list = workflow_unpaired.load_df_results_from_hd(path_experiment)
 
         # calculate shap values
-        calculate_shap_values(base_folder, models, X_train_list, df_train_results)
+        calculate_shap_values(target_folder, models, X_train_list, df_train_results)
 
         # plot shap all values
-        plot_all_shap_values(base_folder, models, X_train_list, y_train_list)
+        plot_all_shap_values(target_folder, models, X_train_list, y_train_list)
 
         # plot shap correlation
-        plot_shap_correlation(base_folder, models)
+        plot_shap_correlation(target_folder, models)

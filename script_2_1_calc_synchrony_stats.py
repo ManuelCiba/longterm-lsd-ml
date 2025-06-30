@@ -63,11 +63,15 @@ def _calculate_curve_features(df_curve):
     max_value_bin = x[np.argmax(y)]
     median_value = np.median(y)
 
-    # calculate area under the curve (AUC)
-    auc = np.sum(y)
+    # get synchrony for different time scales
+    timescales = np.array([100, 10, 1, 0.1, 0.01])   # in seconds
+    # Find the indices of the closest values
+    indices = [np.abs(x - target).argmin() for target in timescales]
+    # Extract the corresponding values from y
+    synchrony_values = y[indices]
 
     #p1_x, p1_y, p1_w, p2_x, p2_y, p2_w = analyze_peaks_by_fitting_two_gaussians(x, y)
-    p1_x, p1_y, p2_x, p2_y = analyze_peaks_by_fitting_polynomial(x, y)
+    #p1_x, p1_y, p2_x, p2_y = analyze_peaks_by_fitting_polynomial(x, y)
     #p1_x, p1_y, p2_x, p2_y = analyze_peaks_by_fitting_polinomial(x, y)
 
     # create a DataFrame to store the features
@@ -78,11 +82,11 @@ def _calculate_curve_features(df_curve):
         's_max': [max_value],
         's_max_bin': [max_value_bin],
         's_median': [median_value],
-        's_auc': [auc],
-        's_p1_x': [p1_x],
-        's_p1_y': [p1_y],
-        's_p2_x': [p2_x],
-        's_p2_y': [p2_y]
+        's_100': [synchrony_values[0]],
+        's_10': [synchrony_values[1]],
+        's_1': [synchrony_values[2]],
+        's_0.1': [synchrony_values[3]],
+        's_0.01': [synchrony_values[4]],
     })
 
     return df_features
@@ -232,7 +236,7 @@ if __name__ == '__main__':
     window_overlaps = settings.WINDOW_OVERLAPS
 
     # get all chip names
-    chip_names = settings.WELLS_CTRL + settings.WELLS_DRUG  # Combine control and DRUG wells
+    chip_names = settings.WELLS_SHAM + settings.WELLS_DRUG  # Combine control and DRUG wells
 
     # Generate all combinations of parameters
     parameter_combinations = list(itertools.product(bin_sizes, window_sizes, window_overlaps))
@@ -276,7 +280,7 @@ if __name__ == '__main__':
                     target_path = os.path.join(result_path, file)
 
                     # Test if target file already exists
-                    if os.path.exists(target_path):
+                    if False: #os.path.exists(target_path):
                         print(f"Already processed: {target_path}")
                         continue
                     else:

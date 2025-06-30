@@ -67,7 +67,10 @@ FOLDER_NAME_RASTERPLOTS = "0_1_rasterplots"
 FOLDER_NAME_split_data = "1_0_split_data"
 FOLDER_NAME_feature_synchrony = "2_0_feature_synchrony"
 FOLDER_NAME_feature_synchrony_stats = "2_0_feature_synchrony_stats"
-FOLDER_NAME_feature_set = "3_0_feature_set"
+FOLDER_NAME_feature_set_synchrony_curve = "3_0_feature_set_synchrony_curve"
+FOLDER_NAME_feature_set_synchrony_stats = "3_0_feature_set_synchrony_stats"
+FOLDER_NAME_feature_set_synchrony_curve_days = "3_0_feature_set_synchrony_curve_days"
+FOLDER_NAME_feature_set_synchrony_stats_days = "3_0_feature_set_synchrony_stats_days"
 
 # Parameter which will be calculated
 MIN_FR = 0.1 * pq.Hz  # Minimum firing rate in Hz, 0.1 Hz = 6 spikes per minute
@@ -75,7 +78,10 @@ BIN_SIZES = [1 * pq.ms] #,10 * pq.ms, 100 * pq.ms]
 WINDOW_SIZES = [480 * pq.s]#[60 * pq.s, 120 * pq.s, 240 * pq.s]  # 30 s excluded, took too long.  600 * pq.s excluded, not enough data points for 10 fold cross validation
 WINDOW_OVERLAPS = [0.5] # 0.5 = 50% overlap
 FEATURE_SET_LIST = [
-                    FOLDER_NAME_feature_set
+                    #FOLDER_NAME_feature_set_synchrony_curve,
+                    #FOLDER_NAME_feature_set_synchrony_stats,
+                    FOLDER_NAME_feature_set_synchrony_curve_days,
+                    FOLDER_NAME_feature_set_synchrony_stats_days,
     ]
-#ML_MODELS = ['RF']
+#ML_MODELS = ['RF', 'SVM', 'NB', 'LR', 'KNN']
 ML_MODELS = ['RF', 'XGboost', 'SVM', 'NB', 'LR', 'KNN', 'MLP']
