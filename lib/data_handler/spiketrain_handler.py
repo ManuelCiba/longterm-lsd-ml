@@ -132,6 +132,25 @@ def binned_to_spiketrains(binned_spiketrain):
 
     return spiketrains
 
+def elephant_spiketrains_to_numpy(spike_trains_elephant):
+    # Find the maximum spike train length
+    max_length = max(len(st) for st in spike_trains_elephant)
+    # Pad each spike train to the maximum length
+    ts = np.array([
+        np.pad(st.magnitude, (0, max_length - len(st.magnitude)), constant_values=np.nan)
+        for st in spike_trains_elephant
+        ])
+    # transpose so that channels are columns not rows
+    ts = ts.T
+    return ts
+
+def elephant_spiketrains_to_list(spike_trains_elephant):
+    ts = elephant_spiketrains_to_numpy(spike_trains_elephant)
+    ts_list = [ts[:, col] for col in range(ts.shape[1])]
+    return ts_list
+
+
+
 def plot_spike_trains(spiketrains):
     spiketrains = _convert_to_numpy_and_remove_nan(spiketrains)
 

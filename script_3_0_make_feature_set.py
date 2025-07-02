@@ -70,7 +70,7 @@ def get_feature_set_df(source_path):
                 source_file = os.path.join(rec_folder_path, file)
 
                 # load the DataFrame
-                df = hd.load_csv_as_df(source_file, index_col=0)
+                df = hd.load_csv_as_df(source_file)
 
                 # Add a new column for the label
                 df['group'] = label_group
@@ -96,8 +96,10 @@ def _merge_two_lists_together(list_a, list_b):
     return list_final
 
 def _merge_two_dataframes_together(df1, df2):
-    merged_df = pd.concat([df1, df2], axis=1)
-    return merged_df
+    df = pd.concat([df1, df2], axis=1)
+    # Remove duplicate columns by transposing, dropping duplicates, and transposing back
+    df = df.T.drop_duplicates().T
+    return df
 
 if __name__ == '__main__':
 
@@ -117,55 +119,94 @@ if __name__ == '__main__':
 
     for path_experiment in path_experiment_list:
 
+        if False:
+            ############################################################
+            # FEATURE-SET 1: only synchrony-curve  
+            SOURCE_DATA_FOLDER = settings.FOLDER_NAME_feature_synchrony 
+            TARGET_DATA_FOLDER = settings.FOLDER_NAME_feature_set_synchrony_curve
+            source_path = path_experiment.replace("TARGET_DATA_FOLDER", SOURCE_DATA_FOLDER)
+            target_path = path_experiment.replace("TARGET_DATA_FOLDER", TARGET_DATA_FOLDER)
+            # get the feature set DataFrame
+            df_feature_set = get_feature_set_df(source_path)
+            # save the DataFrame
+            full_target_path = os.path.join(target_path, 'feature_set_raw.csv')
+            hd.save_df_as_csv(df_feature_set, full_target_path)
+            print(f"Saved feature set to {full_target_path}")
+
+
+            ############################################################
+            # FEATURE-SET 2: only synchrony stats  
+            SOURCE_DATA_FOLDER = settings.FOLDER_NAME_feature_synchrony_stats 
+            TARGET_DATA_FOLDER = settings.FOLDER_NAME_feature_set_synchrony_stats
+            source_path = path_experiment.replace("TARGET_DATA_FOLDER", SOURCE_DATA_FOLDER)
+            target_path = path_experiment.replace("TARGET_DATA_FOLDER", TARGET_DATA_FOLDER)
+            # get the feature set DataFrame
+            df_feature_set = get_feature_set_df(source_path)
+            # save the DataFrame
+            full_target_path = os.path.join(target_path, 'feature_set_raw.csv')
+            hd.save_df_as_csv(df_feature_set, full_target_path)
+            print(f"Saved feature set to {full_target_path}")
+
+            ############################################################
+            # FEATURE-SET 3: synchrony-curve and days (not one-hot-encoded) 
+            SOURCE_DATA_FOLDER = settings.FOLDER_NAME_feature_synchrony 
+            TARGET_DATA_FOLDER = settings.FOLDER_NAME_feature_set_synchrony_curve_days
+            source_path = path_experiment.replace("TARGET_DATA_FOLDER", SOURCE_DATA_FOLDER)
+            target_path = path_experiment.replace("TARGET_DATA_FOLDER", TARGET_DATA_FOLDER)
+            # get the feature set DataFrame
+            df_feature_set = get_feature_set_df(source_path)
+            # save the DataFrame
+            full_target_path = os.path.join(target_path, 'feature_set_raw.csv')
+            hd.save_df_as_csv(df_feature_set, full_target_path)
+            print(f"Saved feature set to {full_target_path}")
+
+
+            ############################################################
+            # FEATURE-SET 4: synchrony stats and days (not one-hot-encoded) 
+            SOURCE_DATA_FOLDER = settings.FOLDER_NAME_feature_synchrony_stats 
+            TARGET_DATA_FOLDER = settings.FOLDER_NAME_feature_set_synchrony_stats_days
+            source_path = path_experiment.replace("TARGET_DATA_FOLDER", SOURCE_DATA_FOLDER)
+            target_path = path_experiment.replace("TARGET_DATA_FOLDER", TARGET_DATA_FOLDER)
+            # get the feature set DataFrame
+            df_feature_set = get_feature_set_df(source_path)
+            # save the DataFrame
+            full_target_path = os.path.join(target_path, 'feature_set_raw.csv')
+            hd.save_df_as_csv(df_feature_set, full_target_path)
+            print(f"Saved feature set to {full_target_path}")
+
         ############################################################
-        # FEATURE-SET 1: only synchrony-curve  
-        SOURCE_DATA_FOLDER = settings.FOLDER_NAME_feature_synchrony 
-        TARGET_DATA_FOLDER = settings.FOLDER_NAME_feature_set_synchrony_curve
+        # FEATURE-SET 5: synchrony curve and bursts and days (not one-hot-encoded) 
+        SOURCE_DATA_FOLDER = settings.FOLDER_NAME_feature_synchrony
+        TARGET_DATA_FOLDER = settings.FOLDER_NAME_feature_set_synchrony_curve_bursts_days
         source_path = path_experiment.replace("TARGET_DATA_FOLDER", SOURCE_DATA_FOLDER)
         target_path = path_experiment.replace("TARGET_DATA_FOLDER", TARGET_DATA_FOLDER)
         # get the feature set DataFrame
-        df_feature_set = get_feature_set_df(source_path)
+        df_synchrony_curve = get_feature_set_df(source_path)
+        # source folder bursts
+        SOURCE_DATA_FOLDER = settings.FOLDER_NAME_feature_bursts
+        source_path = path_experiment.replace("TARGET_DATA_FOLDER", SOURCE_DATA_FOLDER)
+        df_bursts = get_feature_set_df(source_path)
+        # merge two dataframes
+        df_feature_set = _merge_two_dataframes_together(df_synchrony_curve, df_bursts)
         # save the DataFrame
         full_target_path = os.path.join(target_path, 'feature_set_raw.csv')
         hd.save_df_as_csv(df_feature_set, full_target_path)
         print(f"Saved feature set to {full_target_path}")
 
-
         ############################################################
-        # FEATURE-SET 2: only synchrony stats  
-        SOURCE_DATA_FOLDER = settings.FOLDER_NAME_feature_synchrony_stats 
-        TARGET_DATA_FOLDER = settings.FOLDER_NAME_feature_set_synchrony_stats
+        # FEATURE-SET 6: synchrony stats and bursts and days (not one-hot-encoded) 
+        SOURCE_DATA_FOLDER = settings.FOLDER_NAME_feature_synchrony_stats
+        TARGET_DATA_FOLDER = settings.FOLDER_NAME_feature_set_synchrony_stats_bursts_days
         source_path = path_experiment.replace("TARGET_DATA_FOLDER", SOURCE_DATA_FOLDER)
         target_path = path_experiment.replace("TARGET_DATA_FOLDER", TARGET_DATA_FOLDER)
         # get the feature set DataFrame
-        df_feature_set = get_feature_set_df(source_path)
-        # save the DataFrame
-        full_target_path = os.path.join(target_path, 'feature_set_raw.csv')
-        hd.save_df_as_csv(df_feature_set, full_target_path)
-        print(f"Saved feature set to {full_target_path}")
-
-        ############################################################
-        # FEATURE-SET 3: synchrony-curve and days (not one-hot-encoded) 
-        SOURCE_DATA_FOLDER = settings.FOLDER_NAME_feature_synchrony 
-        TARGET_DATA_FOLDER = settings.FOLDER_NAME_feature_set_synchrony_curve_days
+        df_synchrony_curve = get_feature_set_df(source_path)
+        # source folder bursts
+        SOURCE_DATA_FOLDER = settings.FOLDER_NAME_feature_bursts
         source_path = path_experiment.replace("TARGET_DATA_FOLDER", SOURCE_DATA_FOLDER)
-        target_path = path_experiment.replace("TARGET_DATA_FOLDER", TARGET_DATA_FOLDER)
-        # get the feature set DataFrame
-        df_feature_set = get_feature_set_df(source_path)
-        # save the DataFrame
-        full_target_path = os.path.join(target_path, 'feature_set_raw.csv')
-        hd.save_df_as_csv(df_feature_set, full_target_path)
-        print(f"Saved feature set to {full_target_path}")
-
-
-        ############################################################
-        # FEATURE-SET 4: synchrony stats and days (not one-hot-encoded) 
-        SOURCE_DATA_FOLDER = settings.FOLDER_NAME_feature_synchrony_stats 
-        TARGET_DATA_FOLDER = settings.FOLDER_NAME_feature_set_synchrony_stats_days
-        source_path = path_experiment.replace("TARGET_DATA_FOLDER", SOURCE_DATA_FOLDER)
-        target_path = path_experiment.replace("TARGET_DATA_FOLDER", TARGET_DATA_FOLDER)
-        # get the feature set DataFrame
-        df_feature_set = get_feature_set_df(source_path)
+        df_bursts = get_feature_set_df(source_path)
+        # merge two dataframes
+        df_feature_set = _merge_two_dataframes_together(df_synchrony_curve, df_bursts)
         # save the DataFrame
         full_target_path = os.path.join(target_path, 'feature_set_raw.csv')
         hd.save_df_as_csv(df_feature_set, full_target_path)

@@ -1,61 +1,79 @@
+import pandas as pd
+import seaborn as sns
+import matplotlib.pyplot as plt
+from scipy.stats import ttest_ind
+import numpy as np
 import os
 import settings
 from lib.data_handler import folder_structure
 from lib.data_handler import hd
-import pandas as pd
 from datetime import datetime
-import seaborn as sns
-import matplotlib.pyplot as plt
-import numpy as np
 from scipy.stats import mannwhitneyu
 
 
 
-def plot_violin_with_group_stats(df, stat_test_func, y_col="max_synchrony", x_col="days_after_treatment", group_col="group"):
+def preprocess_and_plot(df, target_path):
     """
-    Creates a violin-box-swarm plot with statistical significance stars for DRUG vs SHAM groups.
-
+    Preprocess the data and create violin plots with statistical significance testing.
     Args:
-        df (pd.DataFrame): Input data frame.
-        stat_test_func (function): A function that conducts statistical tests and returns a dictionary of p-values.
-        y_col (str): The column containing the y-axis values (default: "max_synchrony").
-        x_col (str): The column containing the x-axis categories (default: "days_after_treatment").
-        group_col (str): The column containing the group labels (default: "group").
+        df (pd.DataFrame): Input DataFrame containing the features and metadata.
     """
+    # Identify feature columns (exclude non-feature columns)
+    non_feature_cols = ["chip", "y", "group", "days_after_treatment", "file", "recording"]
+    feature_cols = [col for col in df.columns if col not in non_feature_cols]
+    
+    # Group by 'chip', 'group', and 'days_after_treatment', calculate the mean
+    df_mean = df.groupby(["chip", "group", "days_after_treatment"], as_index=False)[feature_cols].mean()
 
-    # Create the plot
-    plt.figure(figsize=(12, 6))
-    sns.violinplot(
-        x=x_col, y=y_col, hue=group_col, data=df, split=True, inner=None, palette="muted", alpha=0.6
-    )
-    sns.boxplot(
-        x=x_col, y=y_col, hue=group_col, data=df, width=0.2, showfliers=False, dodge=True
-    )
-    sns.swarmplot(
-        x=x_col, y=y_col, hue=group_col, data=df, dodge=True, color="k", alpha=0.7
-    )
+    # Group by 'group' and 'days_after_treatment' for statistical tests and plotting
+    df_grouped = df_mean.groupby(["group", "days_after_treatment"])
+    
+    # Initialize the Bonferroni correction factor
+    num_tests = len(feature_cols) * df_mean["days_after_treatment"].nunique()
+    
+    for feature in feature_cols:
+        # Perform statistical testing
+        p_values = {}
+        for day in df_mean["days_after_treatment"].unique():
+            drug_vals = df_mean[(df_mean["days_after_treatment"] == day) & (df_mean["group"] == "DRUG")][feature]
+            sham_vals = df_mean[(df_mean["days_after_treatment"] == day) & (df_mean["group"] == "SHAM")][feature]
+            
+            # Perform t-test
+            if len(drug_vals) > 1 and len(sham_vals) > 1:
+                _, p_val = mannwhitneyu(sham_vals, drug_vals, alternative="two-sided")
+                p_values[day] = min(p_val * num_tests, 1.0)  # Apply Bonferroni correction
+            
+        # Create the violin plot
+        plt.figure(figsize=(12, 6))
+        sns.violinplot(
+            x="days_after_treatment", y=feature, hue="group", 
+            data=df_mean, split=True, inner="box", palette="muted"
+        )
+        sns.swarmplot(
+            x="days_after_treatment", y=feature, hue="group", 
+            data=df_mean, dodge=True, color="k", alpha=0.5, size=5
+        )
+        plt.title(f"Feature: {feature}")
+        plt.xlabel("Days After Treatment")
+        plt.ylabel(f"{feature}")
+        plt.legend(title="Group", loc="upper right")
 
-    # Remove duplicate legends
-    handles, labels = plt.gca().get_legend_handles_labels()
-    plt.legend(handles[:2], labels[:2], title=group_col, loc="upper left")
+        # Add significance stars
+        _add_significance_stars_grouped(p_values, df_mean, "days_after_treatment", feature)
 
-    # Run statistical tests and plot significance stars
-    p_values = stat_test_func(df, y_col, x_col, group_col)
-    _add_significance_stars_grouped(p_values, df, x_col, y_col)
-
-    plt.title("Max Synchrony over Days After Treatment", fontsize=16)
-    plt.ylabel("Max Synchrony", fontsize=14)
-    plt.xlabel("Days After Treatment", fontsize=14)
-    plt.xticks(rotation=45)
-    plt.tight_layout()
-    return plt.gcf()
+        # Save the plot
+        plt.tight_layout()
+        full_target_path = os.path.join(target_path, feature + '.pdf')
+        hd.save_figure(plt.gcf(), full_target_path)
+        print(f"Saved feature set to {full_target_path}")
+        
 
 def _add_significance_stars_grouped(p_values, group_means, x_col, y_col):
     """
     Adds significance stars to the plot based on p-values for grouped data.
 
     Args:
-        p_values (dict): A dictionary with days as keys and p-values as values.
+        p_values (dict): A dictionary with days as keys and corrected p-values as values.
         group_means (pd.DataFrame): The preprocessed mean data frame.
         x_col (str): The column containing the x-axis categories.
         y_col (str): The column containing the y-axis values.
@@ -64,33 +82,9 @@ def _add_significance_stars_grouped(p_values, group_means, x_col, y_col):
         if p_val < 0.05:
             star = "*" if p_val >= 0.01 else ("**" if p_val >= 0.001 else "***")
             y_max = group_means[group_means[x_col] == day][y_col].max()
-            plt.text(day, y_max + 0.05, star, ha="center", color="black", fontsize=12)
-
-def stat_test_func(df, y_col, x_col, group_col):
-    """
-    Conducts Mann-Whitney U tests comparing DRUG vs SHAM for each day.
-
-    Args:
-        df (pd.DataFrame): Input data frame.
-        y_col (str): Column name for the y-axis values.
-        x_col (str): Column name for the x-axis categories.
-        group_col (str): Column name for the group labels.
-
-    Returns:
-        dict: Dictionary of p-values with days as keys.
-    """
-    unique_days = df[x_col].unique()
-    p_values = {}
-
-    for day in unique_days:
-        drug_group = df[(df[x_col] == day) & (df[group_col] == "DRUG")][y_col]
-        sham_group = df[(df[x_col] == day) & (df[group_col] == "SHAM")][y_col]
-
-        if not drug_group.empty and not sham_group.empty:
-            _, p_value = mannwhitneyu(drug_group, sham_group, alternative="two-sided")
-            p_values[day] = p_value
-
-    return p_values
+            plt.text(
+                x=day, y=y_max + 0.05, s=star, ha="center", color="black", fontsize=12
+            )
 
 
 if __name__ == '__main__':
@@ -111,42 +105,21 @@ if __name__ == '__main__':
 
     for path_experiment in path_experiment_list:
 
-        ############################################################
-        # FEATURE-SET 1: only synchrony-curve
-        source_path = path_experiment.replace("PATH", settings.FOLDER_NAME_feature_set_synchrony_curve)
-        target_path = path_experiment.replace("PATH", settings.FOLDER_NAME_statistics)   
-        # load the feature set DataFrame
-        full_source_path = os.path.join(source_path, 'feature_set_raw.csv')
-        df = hd.load_csv_as_df(full_source_path)
-        # statistical test
+        for feature_set in settings.FEATURE_SET_LIST:
 
-        # round "days_after_treatment" to one digit 
-        df["days_after_treatment"] = df["days_after_treatment"].round(0)
+            source_path = path_experiment.replace("PATH", feature_set)
+            target_path = path_experiment.replace("PATH", os.path.join(settings.FOLDER_NAME_statistics, feature_set))   
+            # load the feature set DataFrame
+            full_source_path = os.path.join(source_path, 'feature_set_raw.csv')
+            df = hd.load_csv_as_df(full_source_path)
+            # statistical test
 
-        # Drop rows where days_after_treatment < 0
-        df = df.loc[df["days_after_treatment"] >= 0].reset_index(drop=True)
+            # round "days_after_treatment" to one digit 
+            df["days_after_treatment"] = df["days_after_treatment"].round(0)
 
-        # Identify columns with "Spike-contrast" in their name
-        synchrony_columns = [col for col in df.columns if "Spike-contrast" in col]
+            # Drop rows where days_after_treatment < 0
+            df = df.loc[df["days_after_treatment"] >= 0].reset_index(drop=True)
 
-        # Calculate the maximum synchrony value for each row
-        df["max_synchrony"] = df[synchrony_columns].max(axis=1)
+            preprocess_and_plot(df, target_path)
 
-        # remove all Spike-contrast columns.
-        columns_to_remove = [col for col in df.columns if "Spike-contrast" in col]
-        df = df.drop(columns=columns_to_remove)
-
-        # Step 2: Calculate the mean of `max_synchrony` for each group and day
-        grouped_df = (
-            df.groupby(["chip", "days_after_treatment", "group"], as_index=False)["max_synchrony"]
-            .mean()
-            )
-
-        fig = plot_violin_with_group_stats(grouped_df, stat_test_func)
-
-        # save the DataFrame
-        full_target_path = os.path.join(target_path, 'Max_synchrony.pdf')
-        hd.save_figure(fig, full_target_path)
-        print(f"Saved feature set to {full_target_path}")
-
- 
+    

@@ -7,6 +7,7 @@ from lib.data_handler import hd
 import pandas as pd
 from datetime import datetime
 from sklearn.preprocessing import MinMaxScaler
+import pickle
 
 def _one_hot_encode_days_after_treatment(df):
 
@@ -70,7 +71,7 @@ def preprocess_df_features_longterm(df_features):
 
     return df_features
 
-def preprocess_df_features_longterm_days(df_features):
+def preprocess_df_features_longterm_days(df_features, target_path):
     # calculate the difference between features after DRUG application and before DRUG application
     # this is done by subtracting the mean of the features before DRUG application from the raw features after DRUG application
     
@@ -112,9 +113,26 @@ def preprocess_df_features_longterm_days(df_features):
     # scale column "days_after_treatment" between 0 and 1 
     # Initialize the scaler
     scaler = MinMaxScaler()
-    df_features['days_after_treatment'] = scaler.fit_transform(df_features[['days_after_treatment']])
+    #df_features['days_after_treatment'] = scaler.fit_transform(df_features[['days_after_treatment']])
 
-    return df_features
+    # Scale all features except for "chip" and "y" column
+    exclude_columns = ["chip", "y"]
+    exclude_columns += [col for col in df_features.columns if "Spike-contrast" in col]
+    # Identify columns to scale
+    columns_to_scale = df_features.columns.difference(exclude_columns)
+    # Apply scaling to the selected columns
+    df_features[columns_to_scale] = scaler.fit_transform(df_features[columns_to_scale])
+
+    # save the data
+    # Save the scaler object
+    scaler_path = os.path.join(target_path, "scaler.pkl")
+    with open(scaler_path, 'wb') as f:
+        pickle.dump(scaler, f)
+    # save the DataFrame
+    feature_path = os.path.join(target_path, 'feature_set_processed.csv')
+    hd.save_df_as_csv(df_features, feature_path)
+    print(f"Saved feature set to {feature_path}")
+    
 
 
 
@@ -181,58 +199,63 @@ if __name__ == '__main__':
 
     for path_experiment in path_experiment_list:
 
-        ############################################################
-        # FEATURE-SET 1: only synchrony-curve
-        source_path = path_experiment.replace("PATH", settings.FOLDER_NAME_feature_set_synchrony_curve)
-        target_path = source_path  # save to the same path but different filename   
-        # load the feature set DataFrame
-        full_source_path = os.path.join(source_path, 'feature_set_raw.csv')
-        df_feature_set = hd.load_csv_as_df(full_source_path)
-        # preprocess 
-        df_feature_set = preprocess_df_features_longterm(df_feature_set)
-        # save the DataFrame
-        full_target_path = os.path.join(target_path, 'feature_set_processed.csv')
-        hd.save_df_as_csv(df_feature_set, full_target_path)
-        print(f"Saved feature set to {full_target_path}")
+        if False:
+            ############################################################
+            # FEATURE-SET 1: only synchrony-curve
+            source_path = path_experiment.replace("PATH", settings.FOLDER_NAME_feature_set_synchrony_curve)
+            target_path = source_path  # save to the same path but different filename   
+            # load the feature set DataFrame
+            full_source_path = os.path.join(source_path, 'feature_set_raw.csv')
+            df_feature_set = hd.load_csv_as_df(full_source_path)
+            # preprocess 
+            preprocess_df_features_longterm(df_feature_set, target_path)
+
+            ############################################################
+            # FEATURE-SET 2: only synchrony stats
+            source_path = path_experiment.replace("PATH", settings.FOLDER_NAME_feature_set_synchrony_stats)
+            target_path = source_path  # save to the same path but different filename   
+            # load the feature set DataFrame
+            full_source_path = os.path.join(source_path, 'feature_set_raw.csv')
+            df_feature_set = hd.load_csv_as_df(full_source_path)
+            # preprocess 
+            preprocess_df_features_longterm(df_feature_set, target_path)
+
+            ############################################################
+            # FEATURE-SET 3: synchrony-curve and days (not-one-hot encoded)
+            source_path = path_experiment.replace("PATH", settings.FOLDER_NAME_feature_set_synchrony_curve_days)
+            target_path = source_path  # save to the same path but different filename   
+            # load the feature set DataFrame
+            full_source_path = os.path.join(source_path, 'feature_set_raw.csv')
+            df_feature_set = hd.load_csv_as_df(full_source_path)
+            # preprocess 
+            preprocess_df_features_longterm_days(df_feature_set, target_path)
+
+            ############################################################
+            # FEATURE-SET 4: synchrony stats and days (not-one-hot encoded)
+            source_path = path_experiment.replace("PATH", settings.FOLDER_NAME_feature_set_synchrony_stats_days)
+            target_path = source_path  # save to the same path but different filename   
+            # load the feature set DataFrame
+            full_source_path = os.path.join(source_path, 'feature_set_raw.csv')
+            df_feature_set = hd.load_csv_as_df(full_source_path)
+            # preprocess 
+            preprocess_df_features_longterm_days(df_feature_set, target_path)
 
         ############################################################
-        # FEATURE-SET 2: only synchrony stats
-        source_path = path_experiment.replace("PATH", settings.FOLDER_NAME_feature_set_synchrony_stats)
+        # FEATURE-SET 5: synchrony curve and bursts and days (not-one-hot encoded)
+        source_path = path_experiment.replace("PATH", settings.FOLDER_NAME_feature_set_synchrony_curve_bursts_days)
         target_path = source_path  # save to the same path but different filename   
         # load the feature set DataFrame
         full_source_path = os.path.join(source_path, 'feature_set_raw.csv')
         df_feature_set = hd.load_csv_as_df(full_source_path)
         # preprocess 
-        df_feature_set = preprocess_df_features_longterm(df_feature_set)
-        # save the DataFrame
-        full_target_path = os.path.join(target_path, 'feature_set_processed.csv')
-        hd.save_df_as_csv(df_feature_set, full_target_path)
-        print(f"Saved feature set to {full_target_path}")
-
+        preprocess_df_features_longterm_days(df_feature_set, target_path)
+        
         ############################################################
-        # FEATURE-SET 3: synchrony-curve and days (not-one-hot encoded)
-        source_path = path_experiment.replace("PATH", settings.FOLDER_NAME_feature_set_synchrony_curve_days)
+        # FEATURE-SET 6: synchrony stats and bursts and days (not-one-hot encoded)
+        source_path = path_experiment.replace("PATH", settings.FOLDER_NAME_feature_set_synchrony_stats_bursts_days)
         target_path = source_path  # save to the same path but different filename   
         # load the feature set DataFrame
         full_source_path = os.path.join(source_path, 'feature_set_raw.csv')
         df_feature_set = hd.load_csv_as_df(full_source_path)
         # preprocess 
-        df_feature_set = preprocess_df_features_longterm_days(df_feature_set)
-        # save the DataFrame
-        full_target_path = os.path.join(target_path, 'feature_set_processed.csv')
-        hd.save_df_as_csv(df_feature_set, full_target_path)
-        print(f"Saved feature set to {full_target_path}")
-
-        ############################################################
-        # FEATURE-SET 4: synchrony stats and days (not-one-hot encoded)
-        source_path = path_experiment.replace("PATH", settings.FOLDER_NAME_feature_set_synchrony_stats_days)
-        target_path = source_path  # save to the same path but different filename   
-        # load the feature set DataFrame
-        full_source_path = os.path.join(source_path, 'feature_set_raw.csv')
-        df_feature_set = hd.load_csv_as_df(full_source_path)
-        # preprocess 
-        df_feature_set = preprocess_df_features_longterm_days(df_feature_set)
-        # save the DataFrame
-        full_target_path = os.path.join(target_path, 'feature_set_processed.csv')
-        hd.save_df_as_csv(df_feature_set, full_target_path)
-        print(f"Saved feature set to {full_target_path}")
+        preprocess_df_features_longterm_days(df_feature_set, target_path)
