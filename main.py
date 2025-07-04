@@ -21,6 +21,7 @@ if __name__ == '__main__':
     exec(open(os.path.join(os.getcwd(), "script_3_0_make_feature_set.py")).read())
     exec(open(os.path.join(os.getcwd(), "script_3_1_preprocess_feature_set.py")).read())
     exec(open(os.path.join(os.getcwd(), "script_4_0_machine_learning.py")).read())
+    exec(open(os.path.join(os.getcwd(), "script_4_1_find_best_result.py")).read())
     exec(open(os.path.join(os.getcwd(), "script_5_0_shap.py")).read())
     exec(open(os.path.join(os.getcwd(), "script_6_0_statistics.py")).read())
     
