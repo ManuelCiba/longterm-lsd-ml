@@ -44,19 +44,22 @@ def preprocess_and_plot(df, target_path):
                 p_values[day] = min(p_val * num_tests, 1.0)  # Apply Bonferroni correction
             
         # Create the violin plot
-        plt.figure(figsize=(12, 6))
+        plt.figure(figsize=(10, 6))
         sns.violinplot(
             x="days_after_treatment", y=feature, hue="group", 
             data=df_mean, split=True, inner="box", palette="muted"
         )
         sns.swarmplot(
             x="days_after_treatment", y=feature, hue="group", 
-            data=df_mean, dodge=True, color="k", alpha=0.5, size=5
+            data=df_mean, dodge=True, alpha=0.5, size=5
         )
-        plt.title(f"Feature: {feature}")
-        plt.xlabel("Days After Treatment")
-        plt.ylabel(f"{feature}")
-        plt.legend(title="Group", loc="upper right")
+        # Increase font sizes
+        plt.xlabel("Days After Treatment", fontsize=16)
+        plt.ylabel(feature, fontsize=16)
+        plt.title(f"{feature} by Group Over Time", fontsize=18)
+        plt.xticks(fontsize=14)
+        plt.yticks(fontsize=14)
+        plt.legend(title="Group", fontsize=14, title_fontsize=15)
 
         # Add significance stars
         _add_significance_stars_grouped(p_values, df_mean, "days_after_treatment", feature)

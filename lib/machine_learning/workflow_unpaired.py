@@ -247,8 +247,8 @@ def _evaluate_model(model_name, model, param_grid, X, y, groups):
         refit='AUC',  # Select the model based on ROC AUC score
         cv=cv,
         return_train_score=False,
-        verbose=3, # Verbose output for debugging
-        n_jobs=-1,  # Use all available cores for parallel processing
+        verbose=0, # Verbose output for debugging: 3: show all, 0: off
+        #n_jobs=-1,  # Use all available cores for parallel processing
         pre_dispatch='2*n_jobs'  # Manage memory usage
     )
 

@@ -8,6 +8,7 @@ import pandas as pd
 from datetime import datetime
 from sklearn.preprocessing import MinMaxScaler
 import pickle
+import numpy as np
 
 def _one_hot_encode_days_after_treatment(df):
 
@@ -71,7 +72,7 @@ def preprocess_df_features_longterm(df_features):
 
     return df_features
 
-def preprocess_df_features_longterm_days(df_features, target_path):
+def preprocess_df_features_longterm_days(df_features, target_path, no_corr=False):
     # calculate the difference between features after DRUG application and before DRUG application
     # this is done by subtracting the mean of the features before DRUG application from the raw features after DRUG application
     
@@ -122,6 +123,40 @@ def preprocess_df_features_longterm_days(df_features, target_path):
     columns_to_scale = df_features.columns.difference(exclude_columns)
     # Apply scaling to the selected columns
     df_features[columns_to_scale] = scaler.fit_transform(df_features[columns_to_scale])
+
+    if no_corr:
+
+        # Define the columns you don't want to include in correlation analysis
+        exclude_columns = ["chip", "y"]
+        feature_columns = df_features.columns.difference(exclude_columns)
+        df_feature_only = df_features[feature_columns]
+
+        # Compute correlation matrix
+        corr_matrix = df_feature_only.corr().abs()
+
+        # Track visited features
+        visited = set()
+        to_keep = []
+
+        # Threshold for high correlation
+        threshold = 0.95
+
+        for col in corr_matrix.columns:
+            if col in visited:
+                continue
+
+            # Find features highly correlated with this one (including itself)
+            high_corr = corr_matrix.index[corr_matrix[col] > threshold].tolist()
+
+            # Mark all as visited
+            visited.update(high_corr)
+
+            # Keep just one representative (e.g., the current col)
+            to_keep.append(col)
+
+        # Keep only the selected features + non-feature columns
+        df_features = df_features[to_keep + exclude_columns]
+
 
     # save the data
     # Save the scaler object
@@ -220,25 +255,25 @@ if __name__ == '__main__':
             # preprocess 
             preprocess_df_features_longterm(df_feature_set, target_path)
 
-            ############################################################
-            # FEATURE-SET 3: synchrony-curve and days (not-one-hot encoded)
-            source_path = path_experiment.replace("PATH", settings.FOLDER_NAME_feature_set_synchrony_curve_days)
-            target_path = source_path  # save to the same path but different filename   
-            # load the feature set DataFrame
-            full_source_path = os.path.join(source_path, 'feature_set_raw.csv')
-            df_feature_set = hd.load_csv_as_df(full_source_path)
-            # preprocess 
-            preprocess_df_features_longterm_days(df_feature_set, target_path)
+        ############################################################
+        # FEATURE-SET 3: synchrony-curve and days (not-one-hot encoded)
+        source_path = path_experiment.replace("PATH", settings.FOLDER_NAME_feature_set_synchrony_curve_days)
+        target_path = source_path  # save to the same path but different filename   
+        # load the feature set DataFrame
+        full_source_path = os.path.join(source_path, 'feature_set_raw.csv')
+        df_feature_set = hd.load_csv_as_df(full_source_path)
+        # preprocess 
+        preprocess_df_features_longterm_days(df_feature_set, target_path)
 
-            ############################################################
-            # FEATURE-SET 4: synchrony stats and days (not-one-hot encoded)
-            source_path = path_experiment.replace("PATH", settings.FOLDER_NAME_feature_set_synchrony_stats_days)
-            target_path = source_path  # save to the same path but different filename   
-            # load the feature set DataFrame
-            full_source_path = os.path.join(source_path, 'feature_set_raw.csv')
-            df_feature_set = hd.load_csv_as_df(full_source_path)
-            # preprocess 
-            preprocess_df_features_longterm_days(df_feature_set, target_path)
+        ############################################################
+        # FEATURE-SET 4: synchrony stats and days (not-one-hot encoded)
+        source_path = path_experiment.replace("PATH", settings.FOLDER_NAME_feature_set_synchrony_stats_days)
+        target_path = source_path  # save to the same path but different filename   
+        # load the feature set DataFrame
+        full_source_path = os.path.join(source_path, 'feature_set_raw.csv')
+        df_feature_set = hd.load_csv_as_df(full_source_path)
+        # preprocess 
+        preprocess_df_features_longterm_days(df_feature_set, target_path)
 
         ############################################################
         # FEATURE-SET 5: synchrony curve and bursts and days (not-one-hot encoded)
@@ -259,3 +294,13 @@ if __name__ == '__main__':
         df_feature_set = hd.load_csv_as_df(full_source_path)
         # preprocess 
         preprocess_df_features_longterm_days(df_feature_set, target_path)
+
+        ############################################################
+        # FEATURE-SET 6: synchrony curve and bursts and days, without correlated features
+        source_path = path_experiment.replace("PATH", settings.FOLDER_NAME_feature_set_synchrony_curve_bursts_days_nocorr)
+        target_path = source_path  # save to the same path but different filename   
+        # load the feature set DataFrame
+        full_source_path = os.path.join(source_path, 'feature_set_raw.csv')
+        df_feature_set = hd.load_csv_as_df(full_source_path)
+        # preprocess 
+        preprocess_df_features_longterm_days(df_feature_set, target_path, no_corr = True)

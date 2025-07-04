@@ -21,6 +21,44 @@ import matplotlib.patches as mpatches
 import numpy as np
 import matplotlib.cm as cm
 
+def _combine_shap_explanations(shap_values_list, class_index=1):
+    """
+    Combine SHAP values from multiple Explanation objects manually.
+    """
+    all_values = []
+    all_base_values = []
+    all_data = []
+
+    for expl in shap_values_list:
+        values = expl.values
+        if values.ndim == 3:  # multiclass
+            values = values[:, :, class_index]
+        all_values.append(values)
+        all_base_values.append(expl.base_values)
+        all_data.append(expl.data)
+
+    combined = shap.Explanation(
+        values=np.concatenate(all_values, axis=0),
+        base_values=np.concatenate(all_base_values, axis=0),
+        data=np.concatenate(all_data, axis=0),
+        feature_names=shap_values_list[0].feature_names
+    )
+    return combined
+
+def _combine_all_shap_values(shap_values_list, class_index=1):
+    """
+    Combine SHAP values across splits and return full matrix of per-sample SHAP values.
+    """
+    clean_shap_values_list = []
+    for shap_values in shap_values_list:
+        values = shap_values.values
+        if values.ndim == 3:  # multi-class
+            values = values[:, :, class_index]
+        clean_shap_values_list.append(values)
+
+    combined_shap = np.concatenate(clean_shap_values_list, axis=0)
+    return combined_shap
+
 def OLD_calculate_feature_change(X_train_list, y_train_list):
     # Initialize a DataFrame to store the mean changes for each feature
     feature_change_df = pd.DataFrame()
@@ -53,21 +91,15 @@ def OLD_calculate_feature_change(X_train_list, y_train_list):
 
     return overall_mean_change
 
-def OLD_combine_shap_values_across_splits(shap_values_list):
-    # Calculate mean SHAP values for each split (use absolute values)
-    mean_shap_list = [np.abs(shap_value.values.mean(axis=0)) for shap_value in shap_values_list]
+def _combine_shap_values_across_splits(shap_values_list):
 
-    # check if multi-class
-    if mean_shap_list[0].ndim == 2:
-        # Only use SHAP values of class 1
-        _class = 1
-        mean_shap_list = [mean_shap[:, _class] for mean_shap in mean_shap_list]
-    elif mean_shap_list[0].ndim == 1:
-        # only one class is stored, continue
-        pass
+    combined_shap = _combine_all_shap_values(shap_values_list)
+
+    # Calculate mean over all samples per split
+    mean_abs_shap = np.abs(combined_shap).mean(axis=0)
 
     # Create a DataFrame
-    shap_values_df = pd.DataFrame(mean_shap_list, columns=X_train_list[0].columns)
+    shap_values_df = pd.DataFrame(mean_abs_shap, columns=X_train_list[0].columns)
 
     # Calculate median and min/max across all splits
     median_shap_values = shap_values_df.median()
@@ -146,7 +178,7 @@ def OLD_combined_shap_plot(model_name, shap_values_list, X_train_list, y_train_l
     plt.yticks(fontsize=12)
     return fig
 
-def OLD_plot_all_shap_values(base_folder, models, X_train_list, y_train_list):
+def plot_all_shap_values(base_folder, models, X_train_list, y_train_list):
     # Loop through all models
     for m in range(len(models)):
         model_name = models[m]
@@ -156,13 +188,16 @@ def OLD_plot_all_shap_values(base_folder, models, X_train_list, y_train_list):
         full_path = os.path.join(base_folder, "shap_values_list_" + model_name + ".pkl")
 
         shap_values_list = hd.load_pkl_as_list(full_path)
-        fig = _combined_shap_plot(model_name, shap_values_list, X_train_list, y_train_list)
+        combined_shap = _combine_shap_explanations(shap_values_list, class_index=1)
 
-        full_path = os.path.join(base_folder, "SHAP_all_" + model_name + ".jpg")
-        hd.save_figure(fig, full_path)
-
-        full_path = os.path.join(base_folder, "SHAP_all_" + model_name + ".pdf")
-        hd.save_figure(fig, full_path)
+        output_path = os.path.join(base_folder, "SHAP_all_" + model_name + ".jpg")
+        _plot_shap_values(combined_shap, output_path)
+        
+        #fig = _combined_shap_plot(model_name, shap_values_list, X_train_list, y_train_list)
+        #full_path = os.path.join(base_folder, "SHAP_all_" + model_name + ".jpg")
+        #hd.save_figure(fig, full_path)
+        #full_path = os.path.join(base_folder, "SHAP_all_" + model_name + ".pdf")
+        #hd.save_figure(fig, full_path)
 
 def _plot_shap_values(shap_values, output_path):
     # Plot the SHAP values
@@ -232,14 +267,14 @@ def _plot_shap_dependence(shap_values, X_train, feature_name, output_path, inter
             shap_values = shap_values[:, :, 1]  # Use SHAP values for class 1
 
     # Calculate the mean absolute SHAP values for each feature
-    mean_abs_shap = np.abs(shap_values.values).mean(axis=0)
+    mean_abs_shap = np.median(np.abs(shap_values.values), axis=0)
     
     # Get the most important feature
     most_important_feature = X_train.columns[np.argmax(mean_abs_shap)]
     print(f"Most important feature: {most_important_feature}")
 
     # Rescale the feature values in X_train to be in unit "days" instead of 0...1
-    max_day = 8 # hard coded here for simplicity
+    max_day = 9 # hard coded here for simplicity
     min_day = 2
     X_train_rescaled = X_train.copy()
     X_train_rescaled[feature_name] = min_day + X_train[feature_name] * (max_day - min_day)
@@ -256,58 +291,40 @@ def _plot_shap_dependence(shap_values, X_train, feature_name, output_path, inter
     hd.save_figure(plt.gcf(), output_path)
     hd.save_figure(plt.gcf(), output_path.replace("jpg", "pdf"))
 
-def _plot_combined_shap_dependence(model_name, shap_values_list, X_train_list, y_train_list):
+def _plot_combined_shap_dependence(shap_values_list, X_train_list):
     
     # define which feature should be on the x axis
     feature_name = "days_after_treatment"
 
-    # preprocess shap_values_list 
-    mean_abs_shap_list = []  
-    clean_shap_values_list = []
-    # for each split
-    for shap_values, X_train in zip(shap_values_list, X_train_list):
-        
-        print(len(shap_values.values))
+    combined_shap = _combine_all_shap_values(shap_values_list, class_index=1)
+    combined_X = pd.concat(X_train_list, axis=0)
 
-        # Multi-class case: pick SHAP values for the positive class (e.g., class 1)
-        if len(shap_values.shape) == 3:
-            if shap_values.shape[2] == 2:  # Multi-class SHAP values
-                shap_values = shap_values[:, :, 1]  # Use SHAP values for class 1
-        clean_shap_values_list.append(shap_values.values)
-    
-    # Combine all SHAP values into one big matrix
-    combined_shap_values = np.concatenate(clean_shap_values_list, axis=0)  # Combine along the sample axis
-
-    # Combine X_train_list into one big DataFrame
-    combined_X_train = pd.concat(X_train_list, axis=0)  # Combine all training data
-
-    # Ensure the shape matches combined_shap_values
-    assert combined_X_train.shape[0] == combined_shap_values.shape[0]
-
-    # Calculate the mean absolute SHAP values for each feature
-    mean_abs_shap = np.abs(combined_shap_values).mean(axis=0)
+    # Calculate the median absolute SHAP values for each feature
+    median_abs_shap = np.median(np.abs(combined_shap), axis=0)
     
     # Get the most important feature
-    most_important_feature = combined_X_train.columns[np.argmax(mean_abs_shap)]
+    most_important_feature = combined_X.columns[np.argmax(median_abs_shap)]
     print(f"Most important feature: {most_important_feature}")
 
     # Rescale the feature values in X_train to be in unit "days" instead of 0...1
-    max_day = 8 # hard coded here for simplicity
+    max_day = 9 # hard coded here for simplicity
     min_day = 2
-    combined_X_train[feature_name] = min_day + combined_X_train[feature_name] * (max_day - min_day)
+    combined_X[feature_name] = min_day + combined_X[feature_name] * (max_day - min_day)
 
+    # TODO: DELETE THIS LINE
+    most_important_feature = "Spike-contrast (7.753 s)"
     
     shap.dependence_plot(
         "days_after_treatment",
-        combined_shap_values,
-        combined_X_train,
+        combined_shap,
+        combined_X,
         interaction_index=most_important_feature,
         show=False  # Suppress showing the plot in interactive environments
     )
 
     return plt.gcf()
 
-def plot_all_shap_dependence(base_folder, models, X_train_list, y_train_list):
+def plot_all_shap_dependence(base_folder, models, X_train_list):
     # Loop through all models
     for m in range(len(models)):
         model_name = models[m]
@@ -317,7 +334,7 @@ def plot_all_shap_dependence(base_folder, models, X_train_list, y_train_list):
         full_path = os.path.join(base_folder, "shap_values_list_" + model_name + ".pkl")
 
         shap_values_list = hd.load_pkl_as_list(full_path)
-        fig = _plot_combined_shap_dependence(model_name, shap_values_list, X_train_list, y_train_list)
+        fig = _plot_combined_shap_dependence(shap_values_list, X_train_list)
 
         full_path = os.path.join(base_folder, "SHAP_all_dependence_" + model_name + ".jpg")
         hd.save_figure(fig, full_path)
@@ -358,14 +375,22 @@ def calculate_shap_values(base_folder, models, X_train_list, df_train_results):
             # Create the explainer (different for each model)
             np.random.seed(42)  # fix random seed to get reproducible results
             if model_name in ["RF", "XGboost"]:
-                explainer = shap.TreeExplainer(best_model)
+                # "hclustering" to deal better with correlated features
+                # Summarize the data to 50 representative samples -> faster calculation
+                background = shap.sample(X_train, 50) 
+                #masker = shap.maskers._tabular.Tabular(background, clustering="correlation") 
+                #explainer = shap.Explainer(best_model, masker=masker)
+                explainer = shap.TreeExplainer(best_model, data=background, feature_perturbation="interventional")
             if model_name in ["SVM", "LR", "KNN", "MLP"]:
-                explainer = shap.KernelExplainer(best_model.predict_proba, X_train)
+                background = shap.kmeans(X_train, 50)
+                explainer = shap.KernelExplainer(best_model.predict_proba, background)
             if model_name in ["NB"]:
-                explainer = shap.Explainer(best_model.predict_proba, X_train)
+                background = shap.sample(X_train, 50)
+                explainer = shap.Explainer(best_model.predict_proba, background)
 
             # Calculate SHAP values
-            shap_values = explainer(X_train)
+            X_train_sampled = X_train.sample(20, random_state=42)  # speed up calculation
+            shap_values = explainer(X_train_sampled)
             shap_values_list.append(shap_values)
 
             # plot shap values (classical feature ranking)
@@ -402,8 +427,8 @@ if __name__ == '__main__':
 
         # Define parameter set for which SHAP will be calculated
         bin_size = 1 * pq.ms
-        window_size = 480 * pq.s
-        window_overlap = 0.5
+        window_size = 240 * pq.s
+        window_overlap = 0.75
         models = settings.ML_MODELS
 
         # define path where df_results are stored
@@ -411,6 +436,8 @@ if __name__ == '__main__':
                                      f"bin_{bin_size}",
                                      f"window_{window_size}",
                                      f"overlap_{window_overlap}")
+
+        target_folder_full = path_experiment.replace(SOURCE_DATA_FOLDER, TARGET_DATA_FOLDER)
 
         # load ml results
         df_train_results, df_test_results, X_train_list, y_train_list, X_test_list, y_test_list = workflow_unpaired.load_df_results_from_hd(path_experiment)
@@ -421,13 +448,19 @@ if __name__ == '__main__':
         # since the cross-validaiton already prevented overfitting
 
         # calculate shap values
-        #calculate_shap_values(target_folder, models, X_train_list, df_train_results)
+        calculate_shap_values(target_folder_full, models, X_train_list, df_train_results)
 
         # plot all shap value dependence
-        plot_all_shap_dependence(target_folder, models, X_train_list, y_train_list)
+        try:
+            plot_all_shap_dependence(target_folder_full, models, X_train_list)
+        except Exception as e:
+            print(e)
 
         # plot shap all values
-        #plot_all_shap_values(target_folder, models, X_train_list, y_train_list)
+        try:
+            plot_all_shap_values(target_folder_full, models, X_train_list, y_train_list)
+        except Exception as e:
+            print(e)
 
         # plot shap correlation
         #plot_shap_correlation(target_folder, models)
