@@ -83,5 +83,5 @@ def save_figure(fig, full_path):
     result_folder = os.path.dirname(full_path)
     os.makedirs(result_folder, exist_ok=True)
 
-    fig.savefig(full_path, bbox_inches='tight', dpi=300)
+    fig.savefig(full_path, bbox_inches='tight', dpi=600)
     print("    Saved: " + full_path)

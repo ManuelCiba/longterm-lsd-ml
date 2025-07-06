@@ -36,7 +36,7 @@ def calculate_and_plot_and_save_synchrony(source_path, target_path, window_size)
 
     # Save the figure
     if settings.FLAG_PLOT:
-        figure_path = target_path.replace("csv", "jpg")
+        figure_path = target_path.replace("csv", "pdf")
         hd.save_figure(fig, figure_path)
     plt.close(fig)
 
